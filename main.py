@@ -1,37 +1,28 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import requests
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# Google Sheets setup
-scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-client = gspread.authorize(creds)
-
-# Open your Google Sheet by its name
-sheet = client.open("qirat-records").sheet1  # Replace with your actual sheet name
+# Google Apps Script Web App URL
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyxpEjkF056_GQZMgDAwFzATUB2F3MJyLpaJ_PYHV7Op0QIoc99Mvgr--7edXHE_9Nb6Q/exec"
 
 @app.route('/submit', methods=['POST'])
 def submit():
     try:
-        data = request.get_json()
+        data = request.json
+        required_fields = ["userId", "userName", "grade1", "grade2", "surah", "ayah"]
 
-        # Append data row to Google Sheet
-        sheet.append_row([
-            data.get('userId', ''),
-            data.get('userName', ''),
-            data.get('grade1', ''),
-            data.get('grade2', ''),
-            data.get('surah', ''),
-            data.get('ayah', '')
-        ])
+        if not all(field in data for field in required_fields):
+            return jsonify({"status": "error", "message": "Missing fields"}), 400
 
-        return jsonify({'status': 'success'}), 200
+        # Forward data to Google Sheets
+        response = requests.post(GOOGLE_SHEETS_URL, json=data, headers={"Content-Type": "application/json"})
+        return jsonify({"status": "sent", "google_response": response.text})
+
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run()
+# Needed for Vercel to detect the app
+app = app
